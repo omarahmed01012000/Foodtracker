@@ -463,12 +463,24 @@
     padding: 20px;
     box-shadow: var(--shadow-card);
   }
+  .settings-card + .settings-card {
+    margin-top: 14px;
+  }
   .settings-hint {
     font-size: 12.5px;
     color: var(--color-text-muted);
     margin-top: -6px;
     margin-bottom: 14px;
     line-height: 1.5;
+  }
+  .device-id-box {
+    background: var(--color-bg);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    word-break: break-all;
   }
 
   /* ============================================================
@@ -674,7 +686,7 @@
       <button class="undo-btn" id="undo-btn" disabled>↩️ Undo Last</button>
     </div>
 
-    <div class="section-title">Tap a food to log it</div>
+    <div class="section-title"><span>Tap a food to log it</span></div>
     <div id="food-grid" class="food-grid"></div>
 
     <!-- Today's Log: every entry logged today, each removable -->
@@ -718,12 +730,18 @@
   <section class="screen" id="screen-settings">
     <div class="settings-card">
       <div class="section-title" style="margin-top:0"><span>Daily Goal</span></div>
-      <div class="settings-hint">Set the maximum number of calories you want to consume per day.</div>
+      <div class="settings-hint">Set the maximum number of calories you want to consume per day. This is just for you — other people using this app on their own phone set their own goal.</div>
       <div class="form-row">
         <label>Maximum Calories</label>
         <input type="number" id="input-max-calories" placeholder="2000" min="0" />
       </div>
       <button class="primary-btn" id="save-settings-btn">Save Settings</button>
+    </div>
+
+    <div class="settings-card">
+      <div class="section-title" style="margin-top:0"><span>This Device</span></div>
+      <div class="settings-hint">Your foods, log, and goal are tied to this device/browser automatically — no login needed. Each person gets their own private tracker just by opening the app on their own phone.</div>
+      <div class="device-id-box" id="device-id-box">—</div>
     </div>
   </section>
 
@@ -792,6 +810,39 @@
     console.error("Supabase library failed to load from CDN.");
   }
   const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  /* ============================================================
+     DEVICE / USER IDENTITY
+     Different people can use this app "the same way" (no login
+     screen, no switching) because each browser silently generates
+     its own private ID the first time it's opened, then reuses it
+     forever. Every row saved is tagged with this ID so each
+     person's foods, log, and goal stay separate automatically.
+  ============================================================ */
+  const USER_ID_STORAGE_KEY = "calorie_tracker_user_id";
+
+  function generateUUID() {
+    if (window.crypto && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    // Fallback for older browsers without crypto.randomUUID.
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
+  function getUserId() {
+    let id = localStorage.getItem(USER_ID_STORAGE_KEY);
+    if (!id) {
+      id = generateUUID();
+      localStorage.setItem(USER_ID_STORAGE_KEY, id);
+    }
+    return id;
+  }
+
+  const USER_ID = getUserId();
 
   /* ============================================================
      APP STATE
@@ -887,11 +938,14 @@
 
   /* ============================================================
      SUPABASE: FOODS
+     Every query is scoped to USER_ID so each person only ever
+     sees and modifies their own food list.
   ============================================================ */
   async function loadFoods() {
     const { data, error } = await db
       .from("foods")
       .select("*")
+      .eq("user_id", USER_ID)
       .order("created_at", { ascending: true });
     if (error) {
       showToast(describeError(error, "Couldn't load foods"), "error");
@@ -904,7 +958,7 @@
   async function addFood(name, calories, icon) {
     const { data, error } = await db
       .from("foods")
-      .insert([{ name: name, calories: calories, icon: icon }])
+      .insert([{ name: name, calories: calories, icon: icon, user_id: USER_ID }])
       .select();
 
     if (error) {
@@ -930,7 +984,8 @@
     const { error } = await db
       .from("foods")
       .update({ name: name, calories: calories, icon: icon })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", USER_ID);
     if (error) {
       showToast(describeError(error, "Couldn't update food"), "error");
       console.error("updateFood error:", error);
@@ -944,7 +999,8 @@
     const { error } = await db
       .from("foods")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", USER_ID);
     if (error) {
       showToast(describeError(error, "Couldn't delete food"), "error");
       console.error("deleteFood error:", error);
@@ -956,30 +1012,33 @@
 
   /* ============================================================
      SUPABASE: SETTINGS
+     Keyed by USER_ID (not a fixed row) so each person has their
+     own goal.
   ============================================================ */
   async function loadSettings() {
     const { data, error } = await db
       .from("settings")
       .select("*")
+      .eq("user_id", USER_ID)
       .limit(1);
 
     if (error) {
       showToast(describeError(error, "Couldn't load settings"), "error");
       console.error("loadSettings error:", error);
-      return { id: 1, max_calories: 2000 };
+      return { user_id: USER_ID, max_calories: 2000 };
     }
 
     if (!data || data.length === 0) {
-      // No settings row exists yet — create a default one.
+      // No settings row exists yet for this person — create a default one.
       const { data: created, error: insertError } = await db
         .from("settings")
-        .insert([{ id: 1, max_calories: 2000 }])
+        .insert([{ user_id: USER_ID, max_calories: 2000 }])
         .select();
       if (insertError) {
         console.error("settings insert error:", insertError);
-        return { id: 1, max_calories: 2000 };
+        return { user_id: USER_ID, max_calories: 2000 };
       }
-      return created && created.length > 0 ? created[0] : { id: 1, max_calories: 2000 };
+      return created && created.length > 0 ? created[0] : { user_id: USER_ID, max_calories: 2000 };
     }
 
     return data[0];
@@ -988,7 +1047,7 @@
   async function saveSettings(maxCalories) {
     const { error } = await db
       .from("settings")
-      .upsert([{ id: 1, max_calories: maxCalories }]);
+      .upsert([{ user_id: USER_ID, max_calories: maxCalories }], { onConflict: "user_id" });
     if (error) {
       showToast(describeError(error, "Couldn't save settings"), "error");
       console.error("saveSettings error:", error);
@@ -1007,6 +1066,7 @@
       .from("entries")
       .select("*")
       .eq("day", dayKey)
+      .eq("user_id", USER_ID)
       .order("created_at", { ascending: true });
     if (error) {
       showToast(describeError(error, "Couldn't load today's entries"), "error");
@@ -1026,7 +1086,8 @@
         day: dayKey,
         food_id: food.id || null,
         food_name: food.name,
-        calories: food.calories
+        calories: food.calories,
+        user_id: USER_ID
       }])
       .select();
 
@@ -1047,7 +1108,8 @@
     const { error } = await db
       .from("entries")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", USER_ID);
     if (error) {
       showToast(describeError(error, "Couldn't remove entry"), "error");
       console.error("deleteEntryById error:", error);
@@ -1385,6 +1447,7 @@
   ============================================================ */
   function renderSettings() {
     document.getElementById("input-max-calories").value = state.maxCalories;
+    document.getElementById("device-id-box").textContent = USER_ID;
   }
 
   document.getElementById("save-settings-btn").addEventListener("click", async () => {
