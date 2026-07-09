@@ -473,14 +473,30 @@
     margin-bottom: 14px;
     line-height: 1.5;
   }
-  .device-id-box {
-    background: var(--color-bg);
+  .profile-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .profile-row .profile-name {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .switch-profile-btn {
+    padding: 9px 14px;
+    border: none;
     border-radius: var(--radius-sm);
-    padding: 10px 12px;
-    font-size: 11px;
-    color: var(--color-text-muted);
-    font-family: "SF Mono", Menlo, Consolas, monospace;
-    word-break: break-all;
+    background: var(--color-border);
+    color: var(--color-text);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.12s ease;
+  }
+  .switch-profile-btn:active {
+    transform: scale(0.96);
   }
 
   /* ============================================================
@@ -644,12 +660,132 @@
     margin-bottom: 16px;
   }
 
+  /* ============================================================
+     PROFILE PICKER
+     Shown before the app when this browser doesn't already have
+     a remembered identity. Picking or typing a name is how
+     different people share the app without a real login.
+  ============================================================ */
+  #profile-picker-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--color-bg);
+    z-index: 400;
+    display: flex;
+    justify-content: center;
+    overflow-y: auto;
+  }
+  #profile-picker-overlay.hidden {
+    display: none;
+  }
+  .picker-content {
+    width: 100%;
+    max-width: 480px;
+    padding: 48px 20px 40px;
+  }
+  .picker-title {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+  }
+  .picker-subtitle {
+    font-size: 13.5px;
+    color: var(--color-text-muted);
+    margin-top: 6px;
+    margin-bottom: 22px;
+    line-height: 1.5;
+  }
+  .profile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .profile-pill {
+    background: var(--color-card);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 15px 16px;
+    box-shadow: var(--shadow-card);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text);
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: transform 0.12s ease;
+  }
+  .profile-pill:active {
+    transform: scale(0.98);
+  }
+  .profile-pill .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--color-primary-light);
+    color: var(--color-primary-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .picker-divider {
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 22px 0 16px;
+    position: relative;
+  }
+  .picker-divider::before,
+  .picker-divider::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 40%;
+    height: 1px;
+    background: var(--color-border);
+  }
+  .picker-divider::before { left: 0; }
+  .picker-divider::after { right: 0; }
+
   ::selection {
     background: var(--color-primary-light);
   }
 </style>
 </head>
 <body>
+
+<!-- ============================================================
+     PROFILE PICKER (shown before the app if identity not known)
+============================================================ -->
+<div id="profile-picker-overlay" class="hidden">
+  <div class="picker-content">
+    <div class="picker-title">Who's tracking? 👋</div>
+    <div class="picker-subtitle">Pick your name below, or add yourself if this is your first time — on any device.</div>
+
+    <div id="profile-list" class="profile-list">
+      <div class="empty-state small">
+        <span class="emoji">⏳</span>
+        Loading names...
+      </div>
+    </div>
+
+    <div class="picker-divider">or add yourself</div>
+
+    <div class="form-row">
+      <label>Your Name</label>
+      <input type="text" id="new-profile-name" placeholder="e.g. Sara" />
+    </div>
+    <button class="primary-btn" id="create-profile-btn">Start Tracking</button>
+  </div>
+</div>
 
 <div id="app">
 
@@ -720,7 +856,10 @@
       <button class="cancel-edit-btn" id="cancel-edit-btn" style="display:none;">Cancel Edit</button>
     </div>
 
-    <div class="section-title"><span>All Foods</span></div>
+    <div class="section-title">
+      <span>All Foods</span>
+      <span class="section-hint">Shared by everyone</span>
+    </div>
     <div id="foods-list"></div>
   </section>
 
@@ -730,7 +869,7 @@
   <section class="screen" id="screen-settings">
     <div class="settings-card">
       <div class="section-title" style="margin-top:0"><span>Daily Goal</span></div>
-      <div class="settings-hint">Set the maximum number of calories you want to consume per day. This is just for you — other people using this app on their own phone set their own goal.</div>
+      <div class="settings-hint">Set the maximum number of calories you want to consume per day. This is just for you — other people using this app set their own goal.</div>
       <div class="form-row">
         <label>Maximum Calories</label>
         <input type="number" id="input-max-calories" placeholder="2000" min="0" />
@@ -739,9 +878,12 @@
     </div>
 
     <div class="settings-card">
-      <div class="section-title" style="margin-top:0"><span>This Device</span></div>
-      <div class="settings-hint">Your foods, log, and goal are tied to this device/browser automatically — no login needed. Each person gets their own private tracker just by opening the app on their own phone.</div>
-      <div class="device-id-box" id="device-id-box">—</div>
+      <div class="section-title" style="margin-top:0"><span>Your Profile</span></div>
+      <div class="settings-hint">Your log and goal are tied to your name — not this device — so you'll see the same data no matter where you open the app. The food list is shared, so anything you or anyone else adds shows up for everyone.</div>
+      <div class="profile-row">
+        <div class="profile-name" id="profile-name-display">—</div>
+        <button class="switch-profile-btn" id="switch-profile-btn">Switch</button>
+      </div>
     </div>
   </section>
 
@@ -812,37 +954,30 @@
   const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   /* ============================================================
-     DEVICE / USER IDENTITY
-     Different people can use this app "the same way" (no login
-     screen, no switching) because each browser silently generates
-     its own private ID the first time it's opened, then reuses it
-     forever. Every row saved is tagged with this ID so each
-     person's foods, log, and goal stay separate automatically.
+     IDENTITY
+     Instead of a random per-browser device ID (which breaks the
+     moment someone clears storage or opens a new browser), each
+     person is identified by a name they pick or type once. That
+     name becomes their permanent user_id, so the same person gets
+     the same data back on ANY browser or device by picking their
+     name again. The browser only remembers the choice locally so
+     it doesn't have to ask every single time.
   ============================================================ */
   const USER_ID_STORAGE_KEY = "calorie_tracker_user_id";
+  const DISPLAY_NAME_STORAGE_KEY = "calorie_tracker_display_name";
 
-  function generateUUID() {
-    if (window.crypto && crypto.randomUUID) {
-      return crypto.randomUUID();
-    }
-    // Fallback for older browsers without crypto.randomUUID.
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === "x" ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
+  let USER_ID = localStorage.getItem(USER_ID_STORAGE_KEY);
+  let DISPLAY_NAME = localStorage.getItem(DISPLAY_NAME_STORAGE_KEY);
+
+  // Turns a typed name into a stable, URL-safe identifier.
+  // e.g. "Sara Ali" -> "sara_ali"
+  function slugifyName(name) {
+    return name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "user";
   }
-
-  function getUserId() {
-    let id = localStorage.getItem(USER_ID_STORAGE_KEY);
-    if (!id) {
-      id = generateUUID();
-      localStorage.setItem(USER_ID_STORAGE_KEY, id);
-    }
-    return id;
-  }
-
-  const USER_ID = getUserId();
 
   /* ============================================================
      APP STATE
@@ -937,15 +1072,140 @@
   });
 
   /* ============================================================
+     SUPABASE: PROFILES
+  ============================================================ */
+  async function loadProfiles() {
+    const { data, error } = await db
+      .from("profiles")
+      .select("*")
+      .order("display_name", { ascending: true });
+    if (error) {
+      showToast(describeError(error, "Couldn't load names"), "error");
+      console.error("loadProfiles error:", error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async function createProfile(displayName) {
+    const userId = slugifyName(displayName);
+    const { data, error } = await db
+      .from("profiles")
+      .insert([{ user_id: userId, display_name: displayName.trim() }])
+      .select();
+    if (error) {
+      showToast(describeError(error, "Couldn't create your profile"), "error");
+      console.error("createProfile error:", error);
+      return null;
+    }
+    if (data && data.length > 0) return data[0];
+    return { user_id: userId, display_name: displayName.trim() };
+  }
+
+  /* ============================================================
+     PROFILE PICKER
+  ============================================================ */
+  let cachedProfiles = [];
+
+  function showProfilePicker() {
+    document.getElementById("profile-picker-overlay").classList.remove("hidden");
+    setLoading(false);
+    refreshProfileList();
+  }
+
+  function hideProfilePicker() {
+    document.getElementById("profile-picker-overlay").classList.add("hidden");
+  }
+
+  async function refreshProfileList() {
+    const listEl = document.getElementById("profile-list");
+    cachedProfiles = await loadProfiles();
+
+    if (cachedProfiles.length === 0) {
+      listEl.innerHTML = `
+        <div class="empty-state small">
+          <span class="emoji">👤</span>
+          No one's added themselves yet — be the first!
+        </div>`;
+      return;
+    }
+
+    listEl.innerHTML = "";
+    cachedProfiles.forEach(profile => {
+      const pill = document.createElement("button");
+      pill.className = "profile-pill";
+      const initial = (profile.display_name || "?").trim().charAt(0).toUpperCase();
+      pill.innerHTML = `
+        <span class="avatar">${initial}</span>
+        <span>${escapeHtml(profile.display_name)}</span>
+      `;
+      pill.addEventListener("click", () => selectProfile(profile.user_id, profile.display_name));
+      listEl.appendChild(pill);
+    });
+  }
+
+  function selectProfile(userId, displayName) {
+    USER_ID = userId;
+    DISPLAY_NAME = displayName;
+    localStorage.setItem(USER_ID_STORAGE_KEY, userId);
+    localStorage.setItem(DISPLAY_NAME_STORAGE_KEY, displayName);
+    hideProfilePicker();
+    setLoading(true);
+    init();
+  }
+
+  document.getElementById("create-profile-btn").addEventListener("click", async () => {
+    const input = document.getElementById("new-profile-name");
+    const raw = input.value.trim();
+
+    if (!raw) {
+      showToast("Please enter your name", "error");
+      return;
+    }
+
+    const slug = slugifyName(raw);
+    const existing = cachedProfiles.find(p => p.user_id === slug);
+    if (existing) {
+      showToast(`"${existing.display_name}" already exists — tap it above instead`, "error");
+      return;
+    }
+
+    const btn = document.getElementById("create-profile-btn");
+    btn.disabled = true;
+    try {
+      const profile = await createProfile(raw);
+      if (profile) {
+        input.value = "";
+        selectProfile(profile.user_id, profile.display_name);
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById("switch-profile-btn").addEventListener("click", () => {
+    const confirmed = confirm("Switch to a different name? You'll pick or add a name next.");
+    if (!confirmed) return;
+    localStorage.removeItem(USER_ID_STORAGE_KEY);
+    localStorage.removeItem(DISPLAY_NAME_STORAGE_KEY);
+    USER_ID = null;
+    DISPLAY_NAME = null;
+    showScreen("home");
+    showProfilePicker();
+  });
+
+  /* ============================================================
      SUPABASE: FOODS
-     Every query is scoped to USER_ID so each person only ever
-     sees and modifies their own food list.
+     The food list is SHARED across everyone using the app — one
+     catalog anyone can add to, edit, or remove from. (Entries and
+     settings stay private to each person; see those sections below.)
+     We still tag new foods with the creator's user_id for reference,
+     but never filter or restrict by it.
   ============================================================ */
   async function loadFoods() {
     const { data, error } = await db
       .from("foods")
       .select("*")
-      .eq("user_id", USER_ID)
       .order("created_at", { ascending: true });
     if (error) {
       showToast(describeError(error, "Couldn't load foods"), "error");
@@ -984,8 +1244,7 @@
     const { error } = await db
       .from("foods")
       .update({ name: name, calories: calories, icon: icon })
-      .eq("id", id)
-      .eq("user_id", USER_ID);
+      .eq("id", id);
     if (error) {
       showToast(describeError(error, "Couldn't update food"), "error");
       console.error("updateFood error:", error);
@@ -999,8 +1258,7 @@
     const { error } = await db
       .from("foods")
       .delete()
-      .eq("id", id)
-      .eq("user_id", USER_ID);
+      .eq("id", id);
     if (error) {
       showToast(describeError(error, "Couldn't delete food"), "error");
       console.error("deleteFood error:", error);
@@ -1447,7 +1705,7 @@
   ============================================================ */
   function renderSettings() {
     document.getElementById("input-max-calories").value = state.maxCalories;
-    document.getElementById("device-id-box").textContent = USER_ID;
+    document.getElementById("profile-name-display").textContent = DISPLAY_NAME || "—";
   }
 
   document.getElementById("save-settings-btn").addEventListener("click", async () => {
@@ -1486,7 +1744,8 @@
   async function init() {
     setLoading(true);
 
-    document.getElementById("day-label").textContent = formatDayLabel(getDayKey());
+    document.getElementById("day-label").textContent =
+      `${DISPLAY_NAME ? DISPLAY_NAME + " · " : ""}${formatDayLabel(getDayKey())}`;
 
     try {
       const [foods, settings, entries] = await Promise.all([
@@ -1512,7 +1771,10 @@
     }
   }
 
-  init();
+  // Entry point: always ask "Who's tracking?" on every visit — this
+  // is the deliberate landing page for the app, so people on a
+  // shared device always confirm who they are before anything loads.
+  showProfilePicker();
 </script>
 
 </body>
