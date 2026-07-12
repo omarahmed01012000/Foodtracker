@@ -1,0 +1,2730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Calorie Tracker</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+<style>
+  /* ============================================================
+     DESIGN TOKENS
+  ============================================================ */
+  :root {
+    --color-primary: #2f6fed;
+    --color-primary-dark: #1f4fc4;
+    --color-primary-light: #e8f0ff;
+    --color-success: #2fbf71;
+    --color-danger: #ef4444;
+    --color-bg: #f4f6fb;
+    --color-card: #ffffff;
+    --color-text: #1a1d29;
+    --color-text-muted: #7c8299;
+    --color-border: #ecedf3;
+    --radius-lg: 20px;
+    --radius-md: 14px;
+    --radius-sm: 10px;
+    --shadow-card: 0 2px 10px rgba(30, 40, 80, 0.06);
+    --shadow-elevated: 0 8px 30px rgba(30, 40, 80, 0.12);
+    --nav-height: 72px;
+  }
+
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+  }
+
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    position: relative;
+    padding-bottom: calc(var(--nav-height) + 24px);
+    background: var(--color-bg);
+  }
+
+  /* ============================================================
+     HEADER
+  ============================================================ */
+  header.app-header {
+    padding: 22px 20px 18px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+    color: #fff;
+    border-radius: 0 0 26px 26px;
+    box-shadow: var(--shadow-elevated);
+  }
+
+  header.app-header h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  header.app-header .day-label {
+    margin-top: 4px;
+    font-size: 13.5px;
+    opacity: 0.85;
+    font-weight: 500;
+  }
+
+  /* ============================================================
+     SECTIONS
+  ============================================================ */
+  section.screen {
+    display: none;
+    padding: 18px 16px 8px;
+    animation: fadeIn 0.25s ease;
+  }
+  section.screen.active {
+    display: block;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ============================================================
+     SUMMARY CARD
+  ============================================================ */
+  .summary-card {
+    background: var(--color-card);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    box-shadow: var(--shadow-card);
+    margin-top: -34px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .summary-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 14px;
+  }
+
+  .summary-left .big-number {
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.5px;
+  }
+  .summary-left .label {
+    font-size: 12.5px;
+    color: var(--color-text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-top: 6px;
+  }
+
+  .summary-right {
+    text-align: right;
+  }
+  .summary-right .pct {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-primary);
+  }
+  .summary-right .sub {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+  }
+
+  .progress-track {
+    width: 100%;
+    height: 12px;
+    background: var(--color-border);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #34d67f, var(--color-success));
+    border-radius: 999px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .progress-fill.over {
+    background: linear-gradient(90deg, #ff8a65, var(--color-danger));
+  }
+
+  .summary-footer {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    font-size: 12.5px;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  .undo-btn {
+    width: 100%;
+    margin-top: 16px;
+    padding: 12px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--color-primary-light);
+    color: var(--color-primary-dark);
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.2s ease;
+  }
+  .undo-btn:active {
+    transform: scale(0.97);
+    background: #d9e6ff;
+  }
+  .undo-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* ============================================================
+     SECTION TITLES
+  ============================================================ */
+  .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 22px 4px 10px;
+    color: var(--color-text);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .section-title .section-hint {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  /* ============================================================
+     FOOD CARDS GRID (home)
+  ============================================================ */
+  .food-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .food-card {
+    background: var(--color-card);
+    border-radius: var(--radius-md);
+    padding: 16px 14px;
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    cursor: pointer;
+    border: none;
+    text-align: left;
+    transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .food-card:active {
+    transform: scale(0.95);
+  }
+  .food-card.pulse {
+    animation: pulseCard 0.4s ease;
+  }
+  .food-card:disabled {
+    opacity: 0.6;
+  }
+  @keyframes pulseCard {
+    0% { transform: scale(1); }
+    35% { transform: scale(0.93); background: var(--color-primary-light); }
+    100% { transform: scale(1); }
+  }
+
+  .food-card .icon {
+    font-size: 28px;
+  }
+  .food-card .name {
+    font-weight: 700;
+    font-size: 14.5px;
+    color: var(--color-text);
+  }
+  .food-card .cal {
+    font-size: 12.5px;
+    color: var(--color-text-muted);
+    font-weight: 600;
+  }
+
+  /* The permanent "Custom" quick-add card — always present, styled
+     distinctly (dashed border) so it reads as "not a saved food". */
+  .food-card.custom-card {
+    background: var(--color-primary-light);
+    border: 1.5px dashed var(--color-primary);
+    box-shadow: none;
+  }
+  .food-card.custom-card .name {
+    color: var(--color-primary-dark);
+  }
+  .food-card.custom-card .cal {
+    color: var(--color-primary);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--color-text-muted);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .empty-state.small {
+    padding: 22px 16px;
+  }
+  .empty-state .emoji {
+    font-size: 38px;
+    display: block;
+    margin-bottom: 10px;
+  }
+  .empty-state.small .emoji {
+    font-size: 26px;
+    margin-bottom: 6px;
+  }
+
+  /* ============================================================
+     FOODS SCREEN - FORM
+  ============================================================ */
+  .form-card {
+    background: var(--color-card);
+    border-radius: var(--radius-lg);
+    padding: 18px;
+    box-shadow: var(--shadow-card);
+  }
+
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .form-row label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .form-row input {
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--color-border);
+    font-size: 15px;
+    background: #fafbfe;
+    color: var(--color-text);
+    outline: none;
+    transition: border 0.15s ease;
+    font-family: inherit;
+    width: 100%;
+  }
+  .form-row input:focus {
+    border-color: var(--color-primary);
+    background: #fff;
+  }
+
+  .icon-row {
+    display: flex;
+    gap: 8px;
+  }
+  .icon-row input {
+    width: 68px;
+    text-align: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .icon-row .name-input {
+    flex: 1;
+  }
+
+  .primary-btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--color-primary);
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.2s ease, opacity 0.2s ease;
+    box-shadow: 0 4px 14px rgba(47, 111, 237, 0.35);
+  }
+  .primary-btn:active {
+    transform: scale(0.97);
+    background: var(--color-primary-dark);
+  }
+  .primary-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .cancel-edit-btn {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-weight: 600;
+    font-size: 13.5px;
+    margin-top: 8px;
+    cursor: pointer;
+  }
+
+  /* ============================================================
+     LIST ROWS (foods list + today's log)
+  ============================================================ */
+  .food-list-row {
+    background: var(--color-card);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    box-shadow: var(--shadow-card);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    animation: fadeIn 0.25s ease;
+  }
+  .food-list-row .icon {
+    font-size: 24px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-primary-light);
+    border-radius: 12px;
+    flex-shrink: 0;
+  }
+  .food-list-row .info {
+    flex: 1;
+    min-width: 0;
+  }
+  .food-list-row .info .name {
+    font-weight: 700;
+    font-size: 14.5px;
+  }
+  .food-list-row .info .cal {
+    font-size: 12.5px;
+    color: var(--color-text-muted);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .row-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: none;
+    background: var(--color-border);
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.12s ease;
+  }
+  .icon-btn:active {
+    transform: scale(0.9);
+  }
+  .icon-btn.delete {
+    background: #fdeaea;
+  }
+
+  /* ============================================================
+     SETTINGS
+  ============================================================ */
+  .settings-card {
+    background: var(--color-card);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    box-shadow: var(--shadow-card);
+  }
+  .settings-card + .settings-card {
+    margin-top: 14px;
+  }
+  .settings-hint {
+    font-size: 12.5px;
+    color: var(--color-text-muted);
+    margin-top: -6px;
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+  .profile-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .profile-row .profile-name {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .switch-profile-btn {
+    padding: 9px 14px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--color-border);
+    color: var(--color-text);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.12s ease;
+  }
+  .switch-profile-btn:active {
+    transform: scale(0.96);
+  }
+
+  /* ============================================================
+     BOTTOM NAVIGATION
+  ============================================================ */
+  nav.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
+    height: var(--nav-height);
+    background: #ffffff;
+    box-shadow: 0 -2px 16px rgba(30, 40, 80, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    z-index: 50;
+    border-radius: 22px 22px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  nav.bottom-nav button {
+    background: none;
+    border: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 14px;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+  nav.bottom-nav button .nav-icon {
+    font-size: 21px;
+  }
+  nav.bottom-nav button.active {
+    color: var(--color-primary);
+    background: var(--color-primary-light);
+  }
+
+  /* ============================================================
+     ASK AI — FLOATING ACTION BUTTON
+     Positioned using the same centering trick as the bottom nav
+     so it lines up with the app column on both mobile and desktop.
+  ============================================================ */
+  .ai-fab-wrap {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
+    bottom: calc(var(--nav-height) + 18px);
+    pointer-events: none;
+    z-index: 60;
+  }
+  .ai-fab {
+    position: absolute;
+    right: 18px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+    color: #fff;
+    font-size: 25px;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: var(--shadow-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease;
+  }
+  .ai-fab:active {
+    transform: scale(0.92);
+  }
+
+  /* ============================================================
+     TOAST
+  ============================================================ */
+  #toast-container {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: calc(100% - 32px);
+    max-width: 448px;
+    align-items: center;
+  }
+  .toast {
+    padding: 12px 18px;
+    border-radius: 14px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13.5px;
+    box-shadow: var(--shadow-elevated);
+    animation: toastIn 0.25s ease, toastOut 0.25s ease 3.3s forwards;
+    text-align: center;
+    max-width: 100%;
+    word-break: break-word;
+  }
+  .toast.success { background: var(--color-success); }
+  .toast.error { background: var(--color-danger); }
+  .toast.info { background: var(--color-primary); }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(-14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes toastOut {
+    to { opacity: 0; transform: translateY(-14px); }
+  }
+
+  /* ============================================================
+     LOADING SPINNER
+  ============================================================ */
+  #loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(244, 246, 251, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    flex-direction: column;
+    gap: 14px;
+  }
+  #loading-overlay.hidden {
+    display: none;
+  }
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  #loading-overlay .loading-text {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    font-weight: 600;
+  }
+  .app-logo {
+    width: 76px;
+    height: 76px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    box-shadow: var(--shadow-elevated);
+    animation: logoPulse 1.8s ease-in-out infinite;
+    margin-bottom: 4px;
+  }
+  @keyframes logoPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+
+  /* ============================================================
+     CUSTOM CALORIES MODAL
+  ============================================================ */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 24, 40, 0.5);
+    z-index: 300;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .modal-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .modal-card {
+    background: var(--color-card);
+    width: 100%;
+    max-width: 480px;
+    border-radius: 24px 24px 0 0;
+    padding: 22px 20px calc(22px + env(safe-area-inset-bottom));
+    box-shadow: var(--shadow-elevated);
+    transform: translateY(24px);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .modal-overlay.open .modal-card {
+    transform: translateY(0);
+  }
+  .modal-title {
+    font-size: 17px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .modal-subtitle {
+    font-size: 12.5px;
+    color: var(--color-text-muted);
+    margin-bottom: 16px;
+  }
+
+  /* ============================================================
+     DAYS HISTORY
+  ============================================================ */
+  .history-row .info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .history-row .info .top-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .history-bar-track {
+    width: 100%;
+    height: 6px;
+    background: var(--color-border);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .history-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #34d67f, var(--color-success));
+    border-radius: 999px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .history-bar-fill.over {
+    background: linear-gradient(90deg, #ff8a65, var(--color-danger));
+  }
+  .history-row.today .icon {
+    background: var(--color-primary);
+    color: #fff;
+  }
+
+  /* ============================================================
+     ASK AI — CHAT OVERLAY
+  ============================================================ */
+  #ai-chat-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 350;
+    background: var(--color-bg);
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  #ai-chat-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .ai-chat-inner {
+    max-width: 480px;
+    margin: 0 auto;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .ai-chat-header {
+    padding: 20px 18px 16px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+    color: #fff;
+    border-radius: 0 0 22px 22px;
+    box-shadow: var(--shadow-elevated);
+    flex-shrink: 0;
+  }
+  .ai-chat-title {
+    font-size: 17px;
+    font-weight: 800;
+  }
+  .ai-chat-subtitle {
+    font-size: 11.5px;
+    opacity: 0.85;
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+  .ai-chat-close {
+    background: rgba(255, 255, 255, 0.18);
+    border: none;
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .ai-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ai-msg {
+    max-width: 82%;
+    padding: 11px 14px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .ai-msg.user {
+    align-self: flex-end;
+    background: var(--color-primary);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .ai-msg.assistant {
+    align-self: flex-start;
+    background: var(--color-card);
+    box-shadow: var(--shadow-card);
+    border-bottom-left-radius: 4px;
+  }
+  .ai-msg.action {
+    align-self: center;
+    background: var(--color-primary-light);
+    color: var(--color-primary-dark);
+    font-weight: 700;
+    font-size: 12.5px;
+    border-radius: 999px;
+    padding: 7px 14px;
+    max-width: 92%;
+    text-align: center;
+  }
+  .ai-msg.error {
+    align-self: flex-start;
+    background: #fdeaea;
+    color: var(--color-danger);
+    box-shadow: var(--shadow-card);
+    border-bottom-left-radius: 4px;
+  }
+  .ai-typing {
+    align-self: flex-start;
+    background: var(--color-card);
+    box-shadow: var(--shadow-card);
+    border-radius: 16px;
+    border-bottom-left-radius: 4px;
+    padding: 13px 16px;
+    display: flex;
+    gap: 4px;
+  }
+  .ai-typing span {
+    width: 6px;
+    height: 6px;
+    background: var(--color-text-muted);
+    border-radius: 50%;
+    animation: aiTypingBounce 1.2s infinite ease-in-out;
+  }
+  .ai-typing span:nth-child(2) { animation-delay: 0.15s; }
+  .ai-typing span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes aiTypingBounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+  .ai-chat-input-bar {
+    flex-shrink: 0;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    display: flex;
+    gap: 8px;
+    background: var(--color-card);
+    box-shadow: 0 -2px 16px rgba(30, 40, 80, 0.08);
+  }
+  .ai-chat-input-bar input {
+    flex: 1;
+    padding: 12px 14px;
+    border-radius: 999px;
+    border: 1.5px solid var(--color-border);
+    font-size: 14px;
+    outline: none;
+    font-family: inherit;
+    background: #fafbfe;
+  }
+  .ai-chat-input-bar input:focus {
+    border-color: var(--color-primary);
+    background: #fff;
+  }
+  .ai-chat-send-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: none;
+    background: var(--color-primary);
+    color: #fff;
+    font-size: 17px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.12s ease, opacity 0.2s ease;
+  }
+  .ai-chat-send-btn:active {
+    transform: scale(0.9);
+  }
+  .ai-chat-send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ============================================================
+     PROFILE PICKER
+     Shown before the app when this browser doesn't already have
+     a remembered identity. Picking or typing a name is how
+     different people share the app without a real login.
+  ============================================================ */
+  #profile-picker-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--color-bg);
+    z-index: 400;
+    display: flex;
+    justify-content: center;
+    overflow-y: auto;
+  }
+  #profile-picker-overlay.hidden {
+    display: none;
+  }
+  .picker-content {
+    width: 100%;
+    max-width: 480px;
+    padding: 48px 20px 40px;
+  }
+  .picker-content .app-logo {
+    animation: none;
+    margin-bottom: 18px;
+  }
+  .picker-title {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+  }
+  .picker-subtitle {
+    font-size: 13.5px;
+    color: var(--color-text-muted);
+    margin-top: 6px;
+    margin-bottom: 22px;
+    line-height: 1.5;
+  }
+  .profile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .profile-pill {
+    background: var(--color-card);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 15px 16px;
+    box-shadow: var(--shadow-card);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text);
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: transform 0.12s ease;
+  }
+  .profile-pill:active {
+    transform: scale(0.98);
+  }
+  .profile-pill .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--color-primary-light);
+    color: var(--color-primary-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .picker-divider {
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 22px 0 16px;
+    position: relative;
+  }
+  .picker-divider::before,
+  .picker-divider::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 40%;
+    height: 1px;
+    background: var(--color-border);
+  }
+  .picker-divider::before { left: 0; }
+  .picker-divider::after { right: 0; }
+
+  ::selection {
+    background: var(--color-primary-light);
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     PROFILE PICKER (shown before the app if identity not known)
+============================================================ -->
+<div id="profile-picker-overlay" class="hidden">
+  <div class="picker-content">
+    <div class="picker-title">Who's tracking? 👋</div>
+    <div class="picker-subtitle">Pick your name below, or add yourself if this is your first time — on any device.</div>
+
+    <div id="profile-list" class="profile-list">
+      <div class="empty-state small">
+        <span class="emoji">⏳</span>
+        Loading names...
+      </div>
+    </div>
+
+    <div class="picker-divider">or add yourself</div>
+
+    <div class="form-row">
+      <label>Your Name</label>
+      <input type="text" id="new-profile-name" placeholder="e.g. Sara" />
+    </div>
+    <button class="primary-btn" id="create-profile-btn">Start Tracking</button>
+  </div>
+</div>
+
+<div id="app">
+
+  <!-- ============================================================
+       HEADER
+  ============================================================ -->
+  <header class="app-header">
+    <h1>Calorie Tracker</h1>
+    <div class="day-label" id="day-label">Loading...</div>
+  </header>
+
+  <!-- ============================================================
+       HOME SCREEN
+  ============================================================ -->
+  <section class="screen active" id="screen-home">
+    <div class="summary-card">
+      <div class="summary-top">
+        <div class="summary-left">
+          <div class="big-number" id="calories-left">0</div>
+          <div class="label">Calories Left</div>
+        </div>
+        <div class="summary-right">
+          <div class="pct" id="progress-pct">0%</div>
+          <div class="sub" id="totals-sub">0 / 0 kcal</div>
+        </div>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="summary-footer">
+        <span id="total-today-label">Today's Total: 0 kcal</span>
+        <span id="max-cal-label">Goal: 0 kcal</span>
+      </div>
+      <button class="undo-btn" id="undo-btn" disabled>↩️ Undo Last</button>
+    </div>
+
+    <div class="section-title"><span>Tap a food to log it</span></div>
+    <div id="food-grid" class="food-grid"></div>
+
+    <!-- Today's Log: every entry logged today, each removable -->
+    <div class="section-title">
+      <span>Today's Log</span>
+      <span class="section-hint" id="log-count-hint"></span>
+    </div>
+    <div id="today-log"></div>
+  </section>
+
+  <!-- ============================================================
+       FOODS SCREEN
+  ============================================================ -->
+  <section class="screen" id="screen-foods">
+    <div class="form-card">
+      <div class="section-title" style="margin-top:0"><span id="food-form-title">Add a Food</span></div>
+      <div class="icon-row" style="margin-bottom:14px;">
+        <input type="text" id="input-icon" maxlength="4" placeholder="🍗" />
+        <div class="name-input">
+          <div class="form-row" style="margin-bottom:0;">
+            <label>Food Name</label>
+            <input type="text" id="input-name" placeholder="Chicken" />
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Calories</label>
+        <input type="number" id="input-calories" placeholder="200" min="0" />
+      </div>
+      <button class="primary-btn" id="save-food-btn">Save Food</button>
+      <button class="cancel-edit-btn" id="cancel-edit-btn" style="display:none;">Cancel Edit</button>
+    </div>
+
+    <div class="section-title">
+      <span>All Foods</span>
+      <span class="section-hint">Shared by everyone</span>
+    </div>
+    <div id="foods-list"></div>
+  </section>
+
+  <!-- ============================================================
+       HISTORY SCREEN
+       Last 7 days of totals + the 7-day average.
+  ============================================================ -->
+  <section class="screen" id="screen-history">
+    <div class="summary-card">
+      <div class="summary-top">
+        <div class="summary-left">
+          <div class="big-number" id="history-avg">0</div>
+          <div class="label">7-Day Average</div>
+        </div>
+        <div class="summary-right">
+          <div class="sub" id="history-total-sub">0 kcal total</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title"><span>Last 7 Days</span></div>
+    <div id="history-list"></div>
+  </section>
+
+  <!-- ============================================================
+       SETTINGS SCREEN
+  ============================================================ -->
+  <section class="screen" id="screen-settings">
+    <div class="settings-card">
+      <div class="section-title" style="margin-top:0"><span>Daily Goal</span></div>
+      <div class="settings-hint">Set the maximum number of calories you want to consume per day. This is just for you — other people using this app set their own goal.</div>
+      <div class="form-row">
+        <label>Maximum Calories</label>
+        <input type="number" id="input-max-calories" placeholder="2000" min="0" />
+      </div>
+      <button class="primary-btn" id="save-settings-btn">Save Settings</button>
+    </div>
+
+    <div class="settings-card">
+      <div class="section-title" style="margin-top:0"><span>Your Profile</span></div>
+      <div class="settings-hint">Your log and goal are tied to your name — not this device — so you'll see the same data no matter where you open the app. The food list is shared, so anything you or anyone else adds shows up for everyone.</div>
+      <div class="profile-row">
+        <div class="profile-name" id="profile-name-display">—</div>
+        <button class="switch-profile-btn" id="switch-profile-btn">Switch</button>
+      </div>
+    </div>
+
+    <div class="settings-card">
+      <div class="section-title" style="margin-top:0"><span>AI Assistant</span></div>
+      <div class="settings-hint">Ask AI can answer questions about your calories and even log food, adjust your goal, or edit the food list for you. Bring your own free key from <strong>openrouter.ai</strong> — it's stored only in this browser and sent straight to OpenRouter, never through anything we run.</div>
+      <div class="form-row">
+        <label>OpenRouter API Key</label>
+        <input type="password" id="input-ai-key" placeholder="sk-or-v1-..." autocomplete="off" />
+      </div>
+      <div class="form-row">
+        <label>Model (optional)</label>
+        <input type="text" id="input-ai-model" placeholder="openrouter/free" autocomplete="off" />
+      </div>
+      <button class="primary-btn" id="save-ai-settings-btn">Save AI Settings</button>
+    </div>
+  </section>
+
+</div>
+
+<!-- ============================================================
+     BOTTOM NAVIGATION
+============================================================ -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" data-screen="home">
+    <span class="nav-icon">🏠</span>
+    <span>Home</span>
+  </button>
+  <button class="nav-btn" data-screen="foods">
+    <span class="nav-icon">🍔</span>
+    <span>Foods</span>
+  </button>
+  <button class="nav-btn" data-screen="history">
+    <span class="nav-icon">📊</span>
+    <span>History</span>
+  </button>
+  <button class="nav-btn" data-screen="settings">
+    <span class="nav-icon">⚙️</span>
+    <span>Settings</span>
+  </button>
+</nav>
+
+<!-- ============================================================
+     ASK AI — FLOATING ACTION BUTTON
+============================================================ -->
+<div class="ai-fab-wrap">
+  <button class="ai-fab" id="ai-fab" title="Ask AI">🤖</button>
+</div>
+
+<!-- ============================================================
+     ASK AI — CHAT OVERLAY
+============================================================ -->
+<div id="ai-chat-overlay">
+  <div class="ai-chat-inner">
+    <div class="ai-chat-header">
+      <div>
+        <div class="ai-chat-title">🤖 Ask AI</div>
+        <div class="ai-chat-subtitle">Ask about your calories, or tell it to log things for you</div>
+      </div>
+      <button class="ai-chat-close" id="ai-chat-close-btn">✕</button>
+    </div>
+    <div class="ai-chat-messages" id="ai-chat-messages"></div>
+    <div class="ai-chat-input-bar">
+      <input type="text" id="ai-chat-input" placeholder="e.g. &quot;log 2 boiled eggs&quot;" />
+      <button class="ai-chat-send-btn" id="ai-chat-send-btn">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     CUSTOM CALORIES MODAL
+     Always-available quick-add for anything off-plan.
+============================================================ -->
+<div class="modal-overlay" id="custom-modal-overlay">
+  <div class="modal-card">
+    <div class="modal-title">⚡ Log Custom Calories</div>
+    <div class="modal-subtitle">For anything that isn't in your food list.</div>
+    <div class="form-row">
+      <label>Name (optional)</label>
+      <input type="text" id="custom-name" placeholder="Unplanned snack" />
+    </div>
+    <div class="form-row">
+      <label>Calories</label>
+      <input type="number" id="custom-calories" placeholder="150" min="0" />
+    </div>
+    <button class="primary-btn" id="custom-save-btn">Log Calories</button>
+    <button class="cancel-edit-btn" id="custom-cancel-btn">Cancel</button>
+  </div>
+</div>
+
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="app-logo">🔥</div>
+  <div class="spinner"></div>
+  <div class="loading-text">Loading your data...</div>
+</div>
+
+<script>
+  /* ============================================================
+     SUPABASE SETUP
+     NOTE: the client is stored in "db", not "supabase" — the CDN
+     script attaches its own global object called "supabase" to
+     window, so reusing that name for our client would collide
+     with it.
+  ============================================================ */
+  const SUPABASE_URL = "https://zztpyolnvnjegkkjnqnq.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_-p3EoQJ2XTdUGbZbl_gk9w_tXDbHDHb";
+
+  if (!window.supabase) {
+    console.error("Supabase library failed to load from CDN.");
+  }
+  const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  /* ============================================================
+     IDENTITY
+     Instead of a random per-browser device ID (which breaks the
+     moment someone clears storage or opens a new browser), each
+     person is identified by a name they pick or type once. That
+     name becomes their permanent user_id, so the same person gets
+     the same data back on ANY browser or device by picking their
+     name again. The browser only remembers the choice locally so
+     it doesn't have to ask every single time.
+  ============================================================ */
+  const USER_ID_STORAGE_KEY = "calorie_tracker_user_id";
+  const DISPLAY_NAME_STORAGE_KEY = "calorie_tracker_display_name";
+
+  let USER_ID = localStorage.getItem(USER_ID_STORAGE_KEY);
+  let DISPLAY_NAME = localStorage.getItem(DISPLAY_NAME_STORAGE_KEY);
+
+  // Turns a typed name into a stable, URL-safe identifier.
+  // e.g. "Sara Ali" -> "sara_ali"
+  function slugifyName(name) {
+    return name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "user";
+  }
+
+  /* ============================================================
+     ASK AI CONFIG
+     Bring-your-own-key: calls go straight from this browser to
+     OpenRouter (the only major AI gateway that allows direct
+     browser calls without a backend proxy). The key lives only
+     in localStorage on this device — it's never sent to Supabase
+     or saved anywhere we control.
+  ============================================================ */
+  const AI_KEY_STORAGE_KEY = "calorie_tracker_ai_key";
+  const AI_MODEL_STORAGE_KEY = "calorie_tracker_ai_model";
+  const AI_DEFAULT_MODEL = "openrouter/free"; // OpenRouter's auto-routed free model
+
+  let AI_API_KEY = localStorage.getItem(AI_KEY_STORAGE_KEY) || "";
+  let AI_MODEL = localStorage.getItem(AI_MODEL_STORAGE_KEY) || AI_DEFAULT_MODEL;
+  let aiConversation = []; // ephemeral chat history for this session only
+
+  /* ============================================================
+     APP STATE
+  ============================================================ */
+  let state = {
+    foods: [],
+    entries: [],       // today's entries only, ascending by created_at
+    maxCalories: 0,
+    editingFoodId: null
+  };
+
+  /* ============================================================
+     DAY LOGIC
+     A "day" ends at 4:00 AM, not midnight.
+     If it's before 4 AM, the current day key is yesterday's date.
+  ============================================================ */
+  function getDayKey() {
+    const now = new Date();
+    const cutoffHour = 4;
+    const effective = new Date(now);
+    if (now.getHours() < cutoffHour) {
+      effective.setDate(effective.getDate() - 1);
+    }
+    const year = effective.getFullYear();
+    const month = String(effective.getMonth() + 1).padStart(2, "0");
+    const day = String(effective.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function formatDayLabel(dayKey) {
+    const [y, m, d] = dayKey.split("-").map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    return dateObj.toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric"
+    });
+  }
+
+  function dayKeyToDate(dayKey) {
+    const [y, m, d] = dayKey.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function dateToDayKey(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  // Returns the last N day keys ending with today (oldest first).
+  // Used by both the History screen (7 days) and the cleanup
+  // routine (14 days) so "today" is always defined consistently
+  // via the same 4 AM cutoff rule.
+  function getRecentDayKeys(n) {
+    const anchor = dayKeyToDate(getDayKey());
+    const keys = [];
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(anchor);
+      d.setDate(d.getDate() - i);
+      keys.push(dateToDayKey(d));
+    }
+    return keys;
+  }
+
+  function formatHistoryDayLabel(dayKey) {
+    const recent = getRecentDayKeys(2); // [yesterday, today]
+    if (dayKey === recent[1]) return "Today";
+    if (dayKey === recent[0]) return "Yesterday";
+    return dayKeyToDate(dayKey).toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric"
+    });
+  }
+
+  function formatEntryTime(createdAt) {
+    if (!createdAt) return "";
+    const d = new Date(createdAt);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+
+  /* ============================================================
+     TOAST NOTIFICATIONS
+  ============================================================ */
+  function showToast(message, type = "info") {
+    const container = document.getElementById("toast-container");
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.remove();
+    }, 3600);
+  }
+
+  /* Builds a readable message from a Supabase error object so
+     failures are actually diagnosable instead of a generic string. */
+  function describeError(error, fallback) {
+    if (!error) return fallback;
+    return error.message ? `${fallback}: ${error.message}` : fallback;
+  }
+
+  /* ============================================================
+     LOADING OVERLAY
+  ============================================================ */
+  function setLoading(isLoading) {
+    const overlay = document.getElementById("loading-overlay");
+    overlay.classList.toggle("hidden", !isLoading);
+  }
+
+  /* ============================================================
+     NAVIGATION
+  ============================================================ */
+  function showScreen(screenName) {
+    document.querySelectorAll("section.screen").forEach(el => {
+      el.classList.remove("active");
+    });
+    document.getElementById(`screen-${screenName}`).classList.add("active");
+
+    document.querySelectorAll(".nav-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.screen === screenName);
+    });
+  }
+
+  document.querySelectorAll(".nav-btn").forEach(btn => {
+    btn.addEventListener("click", () => showScreen(btn.dataset.screen));
+  });
+
+  /* ============================================================
+     SUPABASE: PROFILES
+  ============================================================ */
+  async function loadProfiles() {
+    const { data, error } = await db
+      .from("profiles")
+      .select("*")
+      .order("display_name", { ascending: true });
+    if (error) {
+      showToast(describeError(error, "Couldn't load names"), "error");
+      console.error("loadProfiles error:", error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async function createProfile(displayName) {
+    const userId = slugifyName(displayName);
+    const { data, error } = await db
+      .from("profiles")
+      .insert([{ user_id: userId, display_name: displayName.trim() }])
+      .select();
+    if (error) {
+      showToast(describeError(error, "Couldn't create your profile"), "error");
+      console.error("createProfile error:", error);
+      return null;
+    }
+    if (data && data.length > 0) return data[0];
+    return { user_id: userId, display_name: displayName.trim() };
+  }
+
+  /* ============================================================
+     PROFILE PICKER
+  ============================================================ */
+  let cachedProfiles = [];
+
+  function showProfilePicker() {
+    document.getElementById("profile-picker-overlay").classList.remove("hidden");
+    setLoading(false);
+    refreshProfileList();
+  }
+
+  function hideProfilePicker() {
+    document.getElementById("profile-picker-overlay").classList.add("hidden");
+  }
+
+  async function refreshProfileList() {
+    const listEl = document.getElementById("profile-list");
+    cachedProfiles = await loadProfiles();
+
+    if (cachedProfiles.length === 0) {
+      listEl.innerHTML = `
+        <div class="empty-state small">
+          <span class="emoji">👤</span>
+          No one's added themselves yet — be the first!
+        </div>`;
+      return;
+    }
+
+    listEl.innerHTML = "";
+    cachedProfiles.forEach(profile => {
+      const pill = document.createElement("button");
+      pill.className = "profile-pill";
+      const initial = (profile.display_name || "?").trim().charAt(0).toUpperCase();
+      pill.innerHTML = `
+        <span class="avatar">${initial}</span>
+        <span>${escapeHtml(profile.display_name)}</span>
+      `;
+      pill.addEventListener("click", () => selectProfile(profile.user_id, profile.display_name));
+      listEl.appendChild(pill);
+    });
+  }
+
+  function selectProfile(userId, displayName) {
+    USER_ID = userId;
+    DISPLAY_NAME = displayName;
+    localStorage.setItem(USER_ID_STORAGE_KEY, userId);
+    localStorage.setItem(DISPLAY_NAME_STORAGE_KEY, displayName);
+    hideProfilePicker();
+    setLoading(true);
+    init();
+  }
+
+  document.getElementById("create-profile-btn").addEventListener("click", async () => {
+    const input = document.getElementById("new-profile-name");
+    const raw = input.value.trim();
+
+    if (!raw) {
+      showToast("Please enter your name", "error");
+      return;
+    }
+
+    const slug = slugifyName(raw);
+    const existing = cachedProfiles.find(p => p.user_id === slug);
+    if (existing) {
+      showToast(`"${existing.display_name}" already exists — tap it above instead`, "error");
+      return;
+    }
+
+    const btn = document.getElementById("create-profile-btn");
+    btn.disabled = true;
+    try {
+      const profile = await createProfile(raw);
+      if (profile) {
+        input.value = "";
+        selectProfile(profile.user_id, profile.display_name);
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById("switch-profile-btn").addEventListener("click", () => {
+    const confirmed = confirm("Switch to a different name? You'll pick or add a name next.");
+    if (!confirmed) return;
+    localStorage.removeItem(USER_ID_STORAGE_KEY);
+    localStorage.removeItem(DISPLAY_NAME_STORAGE_KEY);
+    USER_ID = null;
+    DISPLAY_NAME = null;
+    showScreen("home");
+    showProfilePicker();
+  });
+
+  /* ============================================================
+     SUPABASE: FOODS
+     The food list is SHARED across everyone using the app — one
+     catalog anyone can add to, edit, or remove from. (Entries and
+     settings stay private to each person; see those sections below.)
+     We still tag new foods with the creator's user_id for reference,
+     but never filter or restrict by it.
+  ============================================================ */
+  async function loadFoods() {
+    const { data, error } = await db
+      .from("foods")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (error) {
+      showToast(describeError(error, "Couldn't load foods"), "error");
+      console.error("loadFoods error:", error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async function addFood(name, calories, icon) {
+    const { data, error } = await db
+      .from("foods")
+      .insert([{ name: name, calories: calories, icon: icon, user_id: USER_ID }])
+      .select();
+
+    if (error) {
+      showToast(describeError(error, "Couldn't save food"), "error");
+      console.error("addFood error:", error);
+      return null;
+    }
+
+    // Some RLS configurations allow INSERT but not the automatic
+    // SELECT that .select() performs afterward. In that case the
+    // insert itself succeeded but data comes back empty — reload
+    // the full list from the server instead of assuming failure.
+    if (data && data.length > 0) {
+      showToast("Saved successfully", "success");
+      return data[0];
+    }
+
+    showToast("Saved successfully", "success");
+    return "reload";
+  }
+
+  async function updateFood(id, name, calories, icon) {
+    const { error } = await db
+      .from("foods")
+      .update({ name: name, calories: calories, icon: icon })
+      .eq("id", id);
+    if (error) {
+      showToast(describeError(error, "Couldn't update food"), "error");
+      console.error("updateFood error:", error);
+      return false;
+    }
+    showToast("Saved successfully", "success");
+    return true;
+  }
+
+  async function deleteFood(id) {
+    const { error } = await db
+      .from("foods")
+      .delete()
+      .eq("id", id);
+    if (error) {
+      showToast(describeError(error, "Couldn't delete food"), "error");
+      console.error("deleteFood error:", error);
+      return false;
+    }
+    showToast("Saved successfully", "success");
+    return true;
+  }
+
+  /* ============================================================
+     SUPABASE: SETTINGS
+     Keyed by USER_ID (not a fixed row) so each person has their
+     own goal.
+  ============================================================ */
+  async function loadSettings() {
+    const { data, error } = await db
+      .from("settings")
+      .select("*")
+      .eq("user_id", USER_ID)
+      .limit(1);
+
+    if (error) {
+      showToast(describeError(error, "Couldn't load settings"), "error");
+      console.error("loadSettings error:", error);
+      return { user_id: USER_ID, max_calories: 2000 };
+    }
+
+    if (!data || data.length === 0) {
+      // No settings row exists yet for this person — create a default one.
+      const { data: created, error: insertError } = await db
+        .from("settings")
+        .insert([{ user_id: USER_ID, max_calories: 2000 }])
+        .select();
+      if (insertError) {
+        console.error("settings insert error:", insertError);
+        return { user_id: USER_ID, max_calories: 2000 };
+      }
+      return created && created.length > 0 ? created[0] : { user_id: USER_ID, max_calories: 2000 };
+    }
+
+    return data[0];
+  }
+
+  async function saveSettings(maxCalories) {
+    const { error } = await db
+      .from("settings")
+      .upsert([{ user_id: USER_ID, max_calories: maxCalories }], { onConflict: "user_id" });
+    if (error) {
+      showToast(describeError(error, "Couldn't save settings"), "error");
+      console.error("saveSettings error:", error);
+      return false;
+    }
+    showToast("Saved successfully", "success");
+    return true;
+  }
+
+  /* ============================================================
+     SUPABASE: ENTRIES
+  ============================================================ */
+  async function loadTodayEntries() {
+    const dayKey = getDayKey();
+    const { data, error } = await db
+      .from("entries")
+      .select("*")
+      .eq("day", dayKey)
+      .eq("user_id", USER_ID)
+      .order("created_at", { ascending: true });
+    if (error) {
+      showToast(describeError(error, "Couldn't load today's entries"), "error");
+      console.error("loadTodayEntries error:", error);
+      return [];
+    }
+    return data || [];
+  }
+
+  // food can be a saved food ({id, name, calories}) or a custom,
+  // unsaved entry ({id: null, name, calories}).
+  async function addEntry(food) {
+    const dayKey = getDayKey();
+    const { data, error } = await db
+      .from("entries")
+      .insert([{
+        day: dayKey,
+        food_id: food.id || null,
+        food_name: food.name,
+        calories: food.calories,
+        user_id: USER_ID
+      }])
+      .select();
+
+    if (error) {
+      showToast(describeError(error, "Couldn't log that food"), "error");
+      console.error("addEntry error:", error);
+      return null;
+    }
+
+    if (data && data.length > 0) {
+      return data[0];
+    }
+    // Insert succeeded but nothing was returned — reload entries to stay in sync.
+    return "reload";
+  }
+
+  async function deleteEntryById(id) {
+    const { error } = await db
+      .from("entries")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", USER_ID);
+    if (error) {
+      showToast(describeError(error, "Couldn't remove entry"), "error");
+      console.error("deleteEntryById error:", error);
+      return false;
+    }
+    return true;
+  }
+
+  async function undoLast() {
+    if (state.entries.length === 0) return;
+    const lastEntry = state.entries[state.entries.length - 1];
+    const success = await deleteEntryById(lastEntry.id);
+    if (!success) return;
+    state.entries = state.entries.filter(e => e.id !== lastEntry.id);
+    showToast(`Removed ${lastEntry.food_name}`, "info");
+    renderTotals();
+    renderTodayLog();
+    loadAndRenderHistory();
+  }
+
+  async function handleDeleteEntry(entry) {
+    const success = await deleteEntryById(entry.id);
+    if (!success) return;
+    state.entries = state.entries.filter(e => e.id !== entry.id);
+    showToast(`Removed ${entry.food_name}`, "info");
+    renderTotals();
+    renderTodayLog();
+    loadAndRenderHistory();
+  }
+
+  /* ============================================================
+     SUPABASE: HISTORY + CLEANUP
+     History shows the last 7 days. Cleanup keeps only the last
+     14 days of entries around so the table doesn't grow forever —
+     older rows are deleted automatically, "resetting" roughly
+     every 2 weeks by always keeping a fresh rolling window.
+  ============================================================ */
+  async function loadRecentEntries(days) {
+    const dayKeys = getRecentDayKeys(days);
+    const earliest = dayKeys[0];
+    const { data, error } = await db
+      .from("entries")
+      .select("day, calories")
+      .eq("user_id", USER_ID)
+      .gte("day", earliest)
+      .order("day", { ascending: true });
+    if (error) {
+      showToast(describeError(error, "Couldn't load history"), "error");
+      console.error("loadRecentEntries error:", error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async function cleanupOldEntries() {
+    const cutoff = getRecentDayKeys(14)[0]; // earliest day to keep
+    const { error } = await db
+      .from("entries")
+      .delete()
+      .eq("user_id", USER_ID)
+      .lt("day", cutoff);
+    if (error) {
+      // Non-critical — just log it, don't bother the user.
+      console.error("cleanupOldEntries error:", error);
+    }
+  }
+
+  /* ============================================================
+     RENDERING: HOME / TOTALS
+  ============================================================ */
+  function getTodayTotal() {
+    return state.entries.reduce((sum, e) => sum + e.calories, 0);
+  }
+
+  function renderTotals() {
+    const total = getTodayTotal();
+    const max = state.maxCalories || 0;
+    const left = Math.max(0, max - total);
+    const pct = max > 0 ? Math.min(100, Math.round((total / max) * 100)) : 0;
+
+    document.getElementById("calories-left").textContent = left;
+    document.getElementById("progress-pct").textContent = `${pct}%`;
+    document.getElementById("totals-sub").textContent = `${total} / ${max} kcal`;
+    document.getElementById("total-today-label").textContent = `Today's Total: ${total} kcal`;
+    document.getElementById("max-cal-label").textContent = `Goal: ${max} kcal`;
+
+    const fill = document.getElementById("progress-fill");
+    fill.style.width = `${pct}%`;
+    fill.classList.toggle("over", total > max && max > 0);
+
+    const undoBtn = document.getElementById("undo-btn");
+    undoBtn.disabled = state.entries.length === 0;
+  }
+
+  function buildCustomCard() {
+    const card = document.createElement("button");
+    card.className = "food-card custom-card";
+    card.innerHTML = `
+      <span class="icon">⚡</span>
+      <span class="name">Custom</span>
+      <span class="cal">Any amount</span>
+    `;
+    card.addEventListener("click", openCustomModal);
+    return card;
+  }
+
+  function renderFoodGrid() {
+    const grid = document.getElementById("food-grid");
+    grid.innerHTML = "";
+
+    // The Custom card is always present so unplanned calories can
+    // always be logged, even if no saved foods exist yet.
+    grid.appendChild(buildCustomCard());
+
+    state.foods.forEach(food => {
+      const card = document.createElement("button");
+      card.className = "food-card";
+      card.dataset.foodId = food.id;
+      card.innerHTML = `
+        <span class="icon">${food.icon || "🍽️"}</span>
+        <span class="name">${escapeHtml(food.name)}</span>
+        <span class="cal">${food.calories} kcal</span>
+      `;
+      card.addEventListener("click", () => handleLogFood(food, card));
+      grid.appendChild(card);
+    });
+  }
+
+  async function handleLogFood(food, cardEl) {
+    cardEl.classList.add("pulse");
+    setTimeout(() => cardEl.classList.remove("pulse"), 400);
+    cardEl.disabled = true;
+
+    const result = await addEntry(food);
+
+    if (result === null) {
+      cardEl.disabled = false;
+      return;
+    }
+
+    if (result === "reload") {
+      state.entries = await loadTodayEntries();
+    } else {
+      state.entries.push(result);
+    }
+
+    renderTotals();
+    renderTodayLog();
+    loadAndRenderHistory();
+    showToast(`+${food.calories} Calories`, "success");
+    cardEl.disabled = false;
+  }
+
+  /* ============================================================
+     RENDERING: TODAY'S LOG
+     Every entry logged today, newest first, each individually
+     removable so the user can track and correct their day.
+  ============================================================ */
+  function renderTodayLog() {
+    const container = document.getElementById("today-log");
+    const countHint = document.getElementById("log-count-hint");
+    container.innerHTML = "";
+
+    countHint.textContent = state.entries.length > 0
+      ? `${state.entries.length} item${state.entries.length === 1 ? "" : "s"}`
+      : "";
+
+    if (state.entries.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state small">
+          <span class="emoji">📝</span>
+          Nothing logged yet today.
+        </div>`;
+      return;
+    }
+
+    // Newest first, so the most recent thing you ate is at the top.
+    const newestFirst = [...state.entries].reverse();
+
+    newestFirst.forEach(entry => {
+      const row = document.createElement("div");
+      row.className = "food-list-row";
+      const time = formatEntryTime(entry.created_at);
+      row.innerHTML = `
+        <div class="icon">🍽️</div>
+        <div class="info">
+          <div class="name">${escapeHtml(entry.food_name)}</div>
+          <div class="cal">${entry.calories} kcal${time ? " · " + time : ""}</div>
+        </div>
+        <div class="row-actions">
+          <button class="icon-btn delete log-delete-btn" title="Remove">🗑️</button>
+        </div>
+      `;
+      row.querySelector(".log-delete-btn").addEventListener("click", () => handleDeleteEntry(entry));
+      container.appendChild(row);
+    });
+  }
+
+  /* ============================================================
+     RENDERING: DAYS HISTORY
+     Last 7 days of totals, plus the 7-day average. Zero-entry
+     days are shown as 0 kcal rather than skipped, so the average
+     reflects actual daily intake over the period.
+  ============================================================ */
+  async function loadAndRenderHistory() {
+    const dayKeys = getRecentDayKeys(7); // oldest -> newest, last = today
+    const rows = await loadRecentEntries(7);
+
+    const totals = {};
+    dayKeys.forEach(k => { totals[k] = 0; });
+    rows.forEach(r => {
+      if (totals.hasOwnProperty(r.day)) {
+        totals[r.day] += r.calories;
+      }
+    });
+
+    const values = dayKeys.map(k => totals[k]);
+    const sum = values.reduce((a, b) => a + b, 0);
+    const avg = Math.round(sum / dayKeys.length);
+    const maxVal = Math.max(1, ...values); // avoid divide-by-zero
+
+    document.getElementById("history-avg").textContent = avg;
+    document.getElementById("history-total-sub").textContent = `${sum} kcal total`;
+
+    const list = document.getElementById("history-list");
+    list.innerHTML = "";
+
+    // Newest day first.
+    [...dayKeys].reverse().forEach(dayKey => {
+      const total = totals[dayKey];
+      const pct = Math.round((total / maxVal) * 100);
+      const isToday = dayKey === dayKeys[dayKeys.length - 1];
+      const overGoal = state.maxCalories > 0 && total > state.maxCalories;
+
+      const row = document.createElement("div");
+      row.className = `food-list-row history-row${isToday ? " today" : ""}`;
+      row.innerHTML = `
+        <div class="icon">📅</div>
+        <div class="info">
+          <div class="top-line">
+            <div class="name">${formatHistoryDayLabel(dayKey)}</div>
+            <div class="cal">${total} kcal</div>
+          </div>
+          <div class="history-bar-track">
+            <div class="history-bar-fill${overGoal ? " over" : ""}" style="width:${pct}%"></div>
+          </div>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+  }
+
+  /* ============================================================
+     CUSTOM CALORIES MODAL
+  ============================================================ */
+  function openCustomModal() {
+    document.getElementById("custom-modal-overlay").classList.add("open");
+    document.getElementById("custom-calories").focus();
+  }
+
+  function closeCustomModal() {
+    document.getElementById("custom-modal-overlay").classList.remove("open");
+    document.getElementById("custom-name").value = "";
+    document.getElementById("custom-calories").value = "";
+  }
+
+  document.getElementById("custom-cancel-btn").addEventListener("click", closeCustomModal);
+
+  // Tapping the dimmed backdrop (not the card itself) also closes it.
+  document.getElementById("custom-modal-overlay").addEventListener("click", (e) => {
+    if (e.target.id === "custom-modal-overlay") closeCustomModal();
+  });
+
+  document.getElementById("custom-save-btn").addEventListener("click", async () => {
+    const name = document.getElementById("custom-name").value.trim() || "Custom";
+    const caloriesRaw = document.getElementById("custom-calories").value;
+    const calories = parseInt(caloriesRaw, 10);
+
+    if (isNaN(calories) || calories < 0) {
+      showToast("Please enter valid calories", "error");
+      return;
+    }
+
+    const saveBtn = document.getElementById("custom-save-btn");
+    saveBtn.disabled = true;
+
+    try {
+      const result = await addEntry({ id: null, name, calories });
+
+      if (result === null) return;
+
+      if (result === "reload") {
+        state.entries = await loadTodayEntries();
+      } else {
+        state.entries.push(result);
+      }
+
+      renderTotals();
+      renderTodayLog();
+      loadAndRenderHistory();
+      showToast(`+${calories} Calories`, "success");
+      closeCustomModal();
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
+  /* ============================================================
+     RENDERING: FOODS SCREEN
+  ============================================================ */
+  function renderFoods() {
+    const list = document.getElementById("foods-list");
+    list.innerHTML = "";
+
+    if (state.foods.length === 0) {
+      list.innerHTML = `
+        <div class="empty-state">
+          <span class="emoji">🍽️</span>
+          No foods added yet.
+        </div>`;
+      return;
+    }
+
+    state.foods.forEach(food => {
+      const row = document.createElement("div");
+      row.className = "food-list-row";
+      row.innerHTML = `
+        <div class="icon">${food.icon || "🍽️"}</div>
+        <div class="info">
+          <div class="name">${escapeHtml(food.name)}</div>
+          <div class="cal">${food.calories} kcal</div>
+        </div>
+        <div class="row-actions">
+          <button class="icon-btn edit-btn" title="Edit">✏️</button>
+          <button class="icon-btn delete delete-btn" title="Delete">🗑️</button>
+        </div>
+      `;
+      row.querySelector(".edit-btn").addEventListener("click", () => startEditFood(food));
+      row.querySelector(".delete-btn").addEventListener("click", () => handleDeleteFood(food));
+      list.appendChild(row);
+    });
+  }
+
+  function startEditFood(food) {
+    state.editingFoodId = food.id;
+    document.getElementById("input-icon").value = food.icon || "";
+    document.getElementById("input-name").value = food.name;
+    document.getElementById("input-calories").value = food.calories;
+    document.getElementById("food-form-title").textContent = "Edit Food";
+    document.getElementById("save-food-btn").textContent = "Update Food";
+    document.getElementById("cancel-edit-btn").style.display = "block";
+    document.getElementById("input-name").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function resetFoodForm() {
+    state.editingFoodId = null;
+    document.getElementById("input-icon").value = "";
+    document.getElementById("input-name").value = "";
+    document.getElementById("input-calories").value = "";
+    document.getElementById("food-form-title").textContent = "Add a Food";
+    document.getElementById("save-food-btn").textContent = "Save Food";
+    document.getElementById("cancel-edit-btn").style.display = "none";
+  }
+
+  document.getElementById("cancel-edit-btn").addEventListener("click", resetFoodForm);
+
+  document.getElementById("save-food-btn").addEventListener("click", async () => {
+    const icon = document.getElementById("input-icon").value.trim() || "🍽️";
+    const name = document.getElementById("input-name").value.trim();
+    const caloriesRaw = document.getElementById("input-calories").value;
+    const calories = parseInt(caloriesRaw, 10);
+
+    if (!name) {
+      showToast("Please enter a food name", "error");
+      return;
+    }
+    if (isNaN(calories) || calories < 0) {
+      showToast("Please enter valid calories", "error");
+      return;
+    }
+
+    const saveBtn = document.getElementById("save-food-btn");
+    saveBtn.disabled = true;
+
+    try {
+      if (state.editingFoodId) {
+        const success = await updateFood(state.editingFoodId, name, calories, icon);
+        if (success) {
+          const idx = state.foods.findIndex(f => f.id === state.editingFoodId);
+          if (idx !== -1) {
+            state.foods[idx] = { ...state.foods[idx], name, calories, icon };
+          }
+          resetFoodForm();
+          renderFoods();
+          renderFoodGrid();
+        }
+      } else {
+        const result = await addFood(name, calories, icon);
+        if (result === "reload") {
+          state.foods = await loadFoods();
+          resetFoodForm();
+          renderFoods();
+          renderFoodGrid();
+        } else if (result) {
+          state.foods.push(result);
+          resetFoodForm();
+          renderFoods();
+          renderFoodGrid();
+        }
+      }
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
+  async function handleDeleteFood(food) {
+    const confirmed = confirm(`Delete "${food.name}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    const success = await deleteFood(food.id);
+    if (success) {
+      state.foods = state.foods.filter(f => f.id !== food.id);
+      renderFoods();
+      renderFoodGrid();
+    }
+  }
+
+  /* ============================================================
+     ASK AI — TOOL DEFINITIONS
+     Standard OpenAI-style function-calling schema. Only actions
+     that CHANGE data get a tool — questions get answered directly
+     from the state summary baked into the system prompt.
+  ============================================================ */
+  const AI_TOOLS = [
+    {
+      type: "function",
+      function: {
+        name: "log_existing_food",
+        description: "Log one of the user's saved foods as eaten today, using its saved calorie amount.",
+        parameters: {
+          type: "object",
+          properties: {
+            food_name: { type: "string", description: "Name of the saved food to log, as close as possible to how it appears in the food list." }
+          },
+          required: ["food_name"]
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "log_custom_calories",
+        description: "Log an ad-hoc calorie amount for today that is NOT one of the user's saved foods (something unplanned).",
+        parameters: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Short label for what was eaten. Defaults to 'Custom' if omitted." },
+            calories: { type: "integer", description: "Number of calories to log." }
+          },
+          required: ["calories"]
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "create_food",
+        description: "Add a brand new food to the shared saved food list. Does NOT log it as eaten — use log_existing_food or log_custom_calories for that.",
+        parameters: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            calories: { type: "integer" },
+            icon: { type: "string", description: "A single emoji to represent the food. Optional." }
+          },
+          required: ["name", "calories"]
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "update_food",
+        description: "Update an existing saved food's name, calories, and/or icon.",
+        parameters: {
+          type: "object",
+          properties: {
+            food_name: { type: "string", description: "Current name of the food to find and update." },
+            new_name: { type: "string" },
+            new_calories: { type: "integer" },
+            new_icon: { type: "string" }
+          },
+          required: ["food_name"]
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "delete_food",
+        description: "Permanently remove a food from the shared saved food list.",
+        parameters: {
+          type: "object",
+          properties: { food_name: { type: "string" } },
+          required: ["food_name"]
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "remove_last_entry",
+        description: "Undo the most recently logged entry for today.",
+        parameters: { type: "object", properties: {} }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "remove_entry_by_name",
+        description: "Remove a specific entry logged today, matched by name (removes the most recent match if there are several).",
+        parameters: {
+          type: "object",
+          properties: { food_name: { type: "string" } },
+          required: ["food_name"]
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "set_daily_goal",
+        description: "Set the user's maximum daily calorie goal.",
+        parameters: {
+          type: "object",
+          properties: { max_calories: { type: "integer" } },
+          required: ["max_calories"]
+        }
+      }
+    }
+  ];
+
+  // Case-insensitive exact match first, then substring, for
+  // matching what the AI or the user typed against real records.
+  function findFoodByName(name) {
+    if (!name) return null;
+    const lower = name.trim().toLowerCase();
+    let match = state.foods.find(f => f.name.trim().toLowerCase() === lower);
+    if (!match) {
+      match = state.foods.find(f => {
+        const fLower = f.name.trim().toLowerCase();
+        return fLower.includes(lower) || lower.includes(fLower);
+      });
+    }
+    return match || null;
+  }
+
+  function findTodayEntryByName(name) {
+    if (!name) return null;
+    const lower = name.trim().toLowerCase();
+    const matches = state.entries.filter(e => {
+      const eLower = e.food_name.trim().toLowerCase();
+      return eLower === lower || eLower.includes(lower) || lower.includes(eLower);
+    });
+    return matches.length > 0 ? matches[matches.length - 1] : null; // most recent
+  }
+
+  /* ============================================================
+     ASK AI — TOOL EXECUTOR
+     Runs the real app functions and returns a plain-language
+     result the model can relay back to the user.
+  ============================================================ */
+  async function executeAiTool(toolName, args) {
+    try {
+      switch (toolName) {
+        case "log_existing_food": {
+          const food = findFoodByName(args.food_name);
+          if (!food) return { success: false, message: `Couldn't find a saved food matching "${args.food_name}".` };
+          const result = await addEntry(food);
+          if (result === null) return { success: false, message: "Logging that food failed." };
+          if (result === "reload") { state.entries = await loadTodayEntries(); } else { state.entries.push(result); }
+          return { success: true, message: `Logged ${food.name} (+${food.calories} kcal).` };
+        }
+
+        case "log_custom_calories": {
+          const name = (args.name || "Custom").trim() || "Custom";
+          const calories = Math.round(Number(args.calories));
+          if (!Number.isFinite(calories) || calories < 0) return { success: false, message: "Invalid calorie amount." };
+          const result = await addEntry({ id: null, name, calories });
+          if (result === null) return { success: false, message: "Logging that failed." };
+          if (result === "reload") { state.entries = await loadTodayEntries(); } else { state.entries.push(result); }
+          return { success: true, message: `Logged ${name} (+${calories} kcal).` };
+        }
+
+        case "create_food": {
+          const name = (args.name || "").trim();
+          const calories = Math.round(Number(args.calories));
+          const icon = (args.icon || "🍽️").trim() || "🍽️";
+          if (!name || !Number.isFinite(calories)) return { success: false, message: "Missing name or calories." };
+          const result = await addFood(name, calories, icon);
+          if (result === "reload") {
+            state.foods = await loadFoods();
+          } else if (result) {
+            state.foods.push(result);
+          } else {
+            return { success: false, message: "Couldn't save that food." };
+          }
+          return { success: true, message: `Added "${name}" (${calories} kcal) to the food list.` };
+        }
+
+        case "update_food": {
+          const food = findFoodByName(args.food_name);
+          if (!food) return { success: false, message: `Couldn't find a saved food matching "${args.food_name}".` };
+          const name = args.new_name ? args.new_name.trim() : food.name;
+          const calories = args.new_calories != null ? Math.round(Number(args.new_calories)) : food.calories;
+          const icon = args.new_icon ? args.new_icon.trim() : (food.icon || "🍽️");
+          const success = await updateFood(food.id, name, calories, icon);
+          if (!success) return { success: false, message: "Couldn't update that food." };
+          const idx = state.foods.findIndex(f => f.id === food.id);
+          if (idx !== -1) state.foods[idx] = { ...state.foods[idx], name, calories, icon };
+          return { success: true, message: `Updated ${food.name} → ${name} (${calories} kcal).` };
+        }
+
+        case "delete_food": {
+          const food = findFoodByName(args.food_name);
+          if (!food) return { success: false, message: `Couldn't find a saved food matching "${args.food_name}".` };
+          const success = await deleteFood(food.id);
+          if (!success) return { success: false, message: "Couldn't delete that food." };
+          state.foods = state.foods.filter(f => f.id !== food.id);
+          return { success: true, message: `Deleted "${food.name}" from the food list.` };
+        }
+
+        case "remove_last_entry": {
+          if (state.entries.length === 0) return { success: false, message: "Nothing logged today to remove." };
+          const last = state.entries[state.entries.length - 1];
+          const success = await deleteEntryById(last.id);
+          if (!success) return { success: false, message: "Couldn't remove that entry." };
+          state.entries = state.entries.filter(e => e.id !== last.id);
+          return { success: true, message: `Removed ${last.food_name} (${last.calories} kcal).` };
+        }
+
+        case "remove_entry_by_name": {
+          const entry = findTodayEntryByName(args.food_name);
+          if (!entry) return { success: false, message: `Couldn't find "${args.food_name}" in today's log.` };
+          const success = await deleteEntryById(entry.id);
+          if (!success) return { success: false, message: "Couldn't remove that entry." };
+          state.entries = state.entries.filter(e => e.id !== entry.id);
+          return { success: true, message: `Removed ${entry.food_name} (${entry.calories} kcal).` };
+        }
+
+        case "set_daily_goal": {
+          const value = Math.round(Number(args.max_calories));
+          if (!Number.isFinite(value) || value < 0) return { success: false, message: "Invalid goal amount." };
+          const success = await saveSettings(value);
+          if (!success) return { success: false, message: "Couldn't save the goal." };
+          state.maxCalories = value;
+          return { success: true, message: `Daily goal set to ${value} kcal.` };
+        }
+
+        default:
+          return { success: false, message: `Unknown action: ${toolName}` };
+      }
+    } catch (err) {
+      console.error("executeAiTool error:", err);
+      return { success: false, message: "Something went wrong performing that action." };
+    }
+  }
+
+  /* ============================================================
+     ASK AI — SYSTEM PROMPT
+     Bakes in the current state so the model can answer analytical
+     questions ("how many calories left?") without needing a tool.
+  ============================================================ */
+  function buildAiSystemPrompt() {
+    const total = getTodayTotal();
+    const max = state.maxCalories || 0;
+    const left = Math.max(0, max - total);
+
+    const foodList = state.foods
+      .map(f => `- ${f.name} (${f.icon || "🍽️"}): ${f.calories} kcal`)
+      .join("\n") || "(no saved foods yet)";
+
+    const entryList = state.entries
+      .map(e => {
+        const time = formatEntryTime(e.created_at);
+        return `- ${e.food_name}: ${e.calories} kcal${time ? " at " + time : ""}`;
+      })
+      .join("\n") || "(nothing logged yet today)";
+
+    return `You are a friendly, concise calorie-tracking assistant embedded in a personal calorie tracker app for ${DISPLAY_NAME || "the user"}.
+
+Today is ${formatDayLabel(getDayKey())}. A "day" resets at 4 AM, not midnight.
+
+Current status:
+- Daily goal: ${max} kcal
+- Logged today: ${total} kcal
+- Remaining: ${left} kcal
+
+Saved foods (shared list everyone using the app can log from):
+${foodList}
+
+Today's log:
+${entryList}
+
+Answer questions about calories, nutrition, or this data directly using the numbers above — do NOT call a tool just to read data. Only call a tool to CHANGE something: log food, add/edit/delete a saved food, change the goal, or remove a logged entry.
+
+When the user asks about, logs, or adds a food that is NOT in the saved list above, use your own general nutrition knowledge to give a reasonable calorie estimate yourself — do not ask the user to supply the number. Say it's an estimate (e.g. "roughly 150 kcal for a medium banana") and proceed using that estimate. Only ask the user for a number if the food is genuinely ambiguous (e.g. unclear portion size or a homemade/branded item you can't reasonably estimate) — and even then, offer your best guess first and ask them to correct it rather than leaving it blank.
+
+When the user asks you to log, add, remove, update, or change something, use the available tools rather than just replying in text — including using your own calorie estimate as the "calories" argument when the food isn't already saved. After taking an action, briefly confirm what you did in plain, friendly language. Keep replies short — a sentence or two, not paragraphs. Always use kcal as the unit. Never invent numbers for data that's already given above (goal, logged totals, saved food calories) — only estimate for foods with no existing record.`;
+  }
+
+  /* ============================================================
+     ASK AI — OPENROUTER CALL
+  ============================================================ */
+  async function callOpenRouter(messages) {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${AI_API_KEY}`,
+        "HTTP-Referer": window.location.href,
+        "X-Title": "Calorie Tracker"
+      },
+      body: JSON.stringify({
+        model: AI_MODEL || AI_DEFAULT_MODEL,
+        messages: messages,
+        tools: AI_TOOLS,
+        tool_choice: "auto"
+      })
+    });
+
+    if (!res.ok) {
+      let detail = "";
+      try { detail = (await res.text()).slice(0, 200); } catch (e) { /* ignore */ }
+      throw new Error(`AI request failed (${res.status})${detail ? ": " + detail : ""}`);
+    }
+    return res.json();
+  }
+
+  /* ============================================================
+     ASK AI — CHAT UI
+  ============================================================ */
+  function appendAiMessage(cssClass, text) {
+    const container = document.getElementById("ai-chat-messages");
+    const bubble = document.createElement("div");
+    bubble.className = `ai-msg ${cssClass}`;
+    bubble.textContent = text;
+    container.appendChild(bubble);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function showAiTyping(show) {
+    const container = document.getElementById("ai-chat-messages");
+    let el = document.getElementById("ai-typing-indicator");
+    if (show) {
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "ai-typing-indicator";
+        el.className = "ai-typing";
+        el.innerHTML = "<span></span><span></span><span></span>";
+        container.appendChild(el);
+      }
+      container.scrollTop = container.scrollHeight;
+    } else if (el) {
+      el.remove();
+    }
+  }
+
+  function openAiChat() {
+    document.getElementById("ai-chat-overlay").classList.add("open");
+    const container = document.getElementById("ai-chat-messages");
+    if (container.children.length === 0) {
+      appendAiMessage("assistant", `Hi${DISPLAY_NAME ? " " + DISPLAY_NAME : ""}! Ask me about your calories, or tell me things like "log 2 boiled eggs" or "set my goal to 1800".`);
+      if (!AI_API_KEY) {
+        appendAiMessage("error", "You haven't added an OpenRouter API key yet — go to Settings → AI Assistant to add one (it's free).");
+      }
+    }
+    document.getElementById("ai-chat-input").focus();
+  }
+
+  function closeAiChat() {
+    document.getElementById("ai-chat-overlay").classList.remove("open");
+  }
+
+  document.getElementById("ai-fab").addEventListener("click", openAiChat);
+  document.getElementById("ai-chat-close-btn").addEventListener("click", closeAiChat);
+
+  async function handleAiSend() {
+    const input = document.getElementById("ai-chat-input");
+    const text = input.value.trim();
+    if (!text) return;
+
+    if (!AI_API_KEY) {
+      appendAiMessage("error", "Add a free OpenRouter API key in Settings → AI Assistant before I can help.");
+      return;
+    }
+
+    input.value = "";
+    appendAiMessage("user", text);
+    aiConversation.push({ role: "user", content: text });
+
+    const sendBtn = document.getElementById("ai-chat-send-btn");
+    sendBtn.disabled = true;
+    showAiTyping(true);
+
+    try {
+      let messages = [
+        { role: "system", content: buildAiSystemPrompt() },
+        ...aiConversation
+      ];
+
+      let stateChanged = false;
+      let safetyCounter = 0;
+
+      while (safetyCounter < 4) {
+        safetyCounter++;
+        const data = await callOpenRouter(messages);
+        const choice = data.choices && data.choices[0];
+        if (!choice) throw new Error("No response from the model.");
+        const msg = choice.message;
+
+        if (msg.tool_calls && msg.tool_calls.length > 0) {
+          messages.push({ role: "assistant", content: msg.content || null, tool_calls: msg.tool_calls });
+          aiConversation.push({ role: "assistant", content: msg.content || "" });
+
+          for (const call of msg.tool_calls) {
+            let args = {};
+            try { args = JSON.parse(call.function.arguments || "{}"); } catch (e) { args = {}; }
+            const result = await executeAiTool(call.function.name, args);
+            stateChanged = stateChanged || result.success;
+            appendAiMessage("action", (result.success ? "✅ " : "⚠️ ") + result.message);
+            messages.push({
+              role: "tool",
+              tool_call_id: call.id,
+              content: JSON.stringify(result)
+            });
+          }
+          continue; // let the model respond to the tool results
+        }
+
+        const replyText = msg.content || "...";
+        appendAiMessage("assistant", replyText);
+        aiConversation.push({ role: "assistant", content: replyText });
+        break;
+      }
+
+      if (stateChanged) {
+        renderFoodGrid();
+        renderFoods();
+        renderTotals();
+        renderTodayLog();
+        renderSettings();
+        loadAndRenderHistory();
+      }
+    } catch (err) {
+      console.error("AI error:", err);
+      appendAiMessage("error", describeError(err, "Something went wrong talking to the AI"));
+    } finally {
+      showAiTyping(false);
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+  document.getElementById("ai-chat-send-btn").addEventListener("click", handleAiSend);
+  document.getElementById("ai-chat-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAiSend();
+    }
+  });
+
+  /* ============================================================
+     RENDERING: SETTINGS SCREEN
+  ============================================================ */
+  function renderSettings() {
+    document.getElementById("input-max-calories").value = state.maxCalories;
+    document.getElementById("profile-name-display").textContent = DISPLAY_NAME || "—";
+    document.getElementById("input-ai-key").value = AI_API_KEY;
+    document.getElementById("input-ai-model").value = AI_MODEL;
+  }
+
+  document.getElementById("save-settings-btn").addEventListener("click", async () => {
+    const raw = document.getElementById("input-max-calories").value;
+    const value = parseInt(raw, 10);
+
+    if (isNaN(value) || value < 0) {
+      showToast("Please enter a valid number", "error");
+      return;
+    }
+
+    const success = await saveSettings(value);
+    if (success) {
+      state.maxCalories = value;
+      renderTotals();
+    }
+  });
+
+  document.getElementById("save-ai-settings-btn").addEventListener("click", () => {
+    const key = document.getElementById("input-ai-key").value.trim();
+    const model = document.getElementById("input-ai-model").value.trim() || AI_DEFAULT_MODEL;
+    AI_API_KEY = key;
+    AI_MODEL = model;
+    localStorage.setItem(AI_KEY_STORAGE_KEY, key);
+    localStorage.setItem(AI_MODEL_STORAGE_KEY, model);
+    showToast("AI settings saved", "success");
+  });
+
+  /* ============================================================
+     UNDO BUTTON
+  ============================================================ */
+  document.getElementById("undo-btn").addEventListener("click", undoLast);
+
+  /* ============================================================
+     UTILITIES
+  ============================================================ */
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  /* ============================================================
+     INIT
+  ============================================================ */
+  async function init() {
+    setLoading(true);
+
+    document.getElementById("day-label").textContent =
+      `${DISPLAY_NAME ? DISPLAY_NAME + " · " : ""}${formatDayLabel(getDayKey())}`;
+
+    try {
+      const [foods, settings, entries] = await Promise.all([
+        loadFoods(),
+        loadSettings(),
+        loadTodayEntries()
+      ]);
+
+      state.foods = foods;
+      state.maxCalories = settings.max_calories || 0;
+      state.entries = entries;
+
+      renderFoodGrid();
+      renderFoods();
+      renderSettings();
+      renderTotals();
+      renderTodayLog();
+
+      // Housekeeping: silently trim anything older than 14 days,
+      // then load the 7-day history view. Neither blocks the
+      // main screen from appearing.
+      cleanupOldEntries().then(() => loadAndRenderHistory());
+    } catch (err) {
+      console.error("init error:", err);
+      showToast(describeError(err, "Something went wrong loading the app"), "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Entry point: always ask "Who's tracking?" on every visit — this
+  // is the deliberate landing page for the app, so people on a
+  // shared device always confirm who they are before anything loads.
+  showProfilePicker();
+</script>
+
+</body>
+</html>
