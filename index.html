@@ -224,6 +224,30 @@
   }
 
   /* ============================================================
+     SEARCH BAR
+  ============================================================ */
+  .search-bar {
+    width: 100%;
+    padding: 11px 16px;
+    border-radius: 999px;
+    border: 1.5px solid var(--color-border);
+    font-size: 14px;
+    background: var(--color-card);
+    color: var(--color-text);
+    outline: none;
+    font-family: inherit;
+    margin: 4px 0 12px;
+    transition: border 0.15s ease, box-shadow 0.15s ease;
+  }
+  .search-bar:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+  .search-bar::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  /* ============================================================
      FOOD CARDS GRID (home)
   ============================================================ */
   .food-grid {
@@ -1348,6 +1372,7 @@
     </div>
 
     <div class="section-title"><span>Tap a food to log it</span></div>
+    <input type="text" class="search-bar" id="food-grid-search" placeholder="🔍 Search foods..." />
     <div id="food-grid" class="food-grid"></div>
 
     <!-- Today's Log: every entry logged today, each removable -->
@@ -1355,6 +1380,7 @@
       <span>Today's Log</span>
       <span class="section-hint" id="log-count-hint"></span>
     </div>
+    <input type="text" class="search-bar" id="today-log-search" placeholder="🔍 Search today's log..." />
     <div id="today-log"></div>
   </section>
 
@@ -1386,6 +1412,7 @@
       <span>All Foods</span>
       <span class="section-hint">Shared by everyone</span>
     </div>
+    <input type="text" class="search-bar" id="foods-list-search" placeholder="🔍 Search foods..." />
     <div id="foods-list"></div>
   </section>
 
@@ -2281,15 +2308,23 @@
     return card;
   }
 
+  let foodGridSearchTerm = "";
+
   function renderFoodGrid() {
     const grid = document.getElementById("food-grid");
     grid.innerHTML = "";
 
-    // The Custom card is always present so unplanned calories can
-    // always be logged, even if no saved foods exist yet.
+    // The Custom card is always present — always logable, and not
+    // subject to the search filter — so unplanned calories can
+    // always be logged, even mid-search.
     grid.appendChild(buildCustomCard());
 
-    state.foods.forEach(food => {
+    const term = foodGridSearchTerm.trim().toLowerCase();
+    const visibleFoods = term
+      ? state.foods.filter(f => f.name.trim().toLowerCase().includes(term))
+      : state.foods;
+
+    visibleFoods.forEach(food => {
       const card = document.createElement("button");
       card.className = "food-card";
       card.dataset.foodId = food.id;
@@ -2301,7 +2336,20 @@
       card.addEventListener("click", () => handleLogFood(food, card));
       grid.appendChild(card);
     });
+
+    if (term && visibleFoods.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state small";
+      empty.style.gridColumn = "1 / -1";
+      empty.innerHTML = `<span class="emoji">🔍</span>No foods match "${escapeHtml(foodGridSearchTerm.trim())}"`;
+      grid.appendChild(empty);
+    }
   }
+
+  document.getElementById("food-grid-search").addEventListener("input", (e) => {
+    foodGridSearchTerm = e.target.value;
+    renderFoodGrid();
+  });
 
   async function handleLogFood(food, cardEl) {
     cardEl.classList.add("pulse");
@@ -2333,6 +2381,8 @@
      Every entry logged today, newest first, each individually
      removable so the user can track and correct their day.
   ============================================================ */
+  let todayLogSearchTerm = "";
+
   function renderTodayLog() {
     const container = document.getElementById("today-log");
     const countHint = document.getElementById("log-count-hint");
@@ -2351,10 +2401,24 @@
       return;
     }
 
+    const term = todayLogSearchTerm.trim().toLowerCase();
+
     // Newest first, so the most recent thing you ate is at the top.
     const newestFirst = [...state.entries].reverse();
+    const visible = term
+      ? newestFirst.filter(e => e.food_name.trim().toLowerCase().includes(term))
+      : newestFirst;
 
-    newestFirst.forEach(entry => {
+    if (visible.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state small">
+          <span class="emoji">🔍</span>
+          Nothing in today's log matches "${escapeHtml(todayLogSearchTerm.trim())}"
+        </div>`;
+      return;
+    }
+
+    visible.forEach(entry => {
       const row = document.createElement("div");
       row.className = "food-list-row";
       const time = formatEntryTime(entry.created_at);
@@ -2372,6 +2436,11 @@
       container.appendChild(row);
     });
   }
+
+  document.getElementById("today-log-search").addEventListener("input", (e) => {
+    todayLogSearchTerm = e.target.value;
+    renderTodayLog();
+  });
 
   /* ============================================================
      RENDERING: DAYS HISTORY
@@ -2583,6 +2652,8 @@
   /* ============================================================
      RENDERING: FOODS SCREEN
   ============================================================ */
+  let foodsListSearchTerm = "";
+
   function renderFoods() {
     const list = document.getElementById("foods-list");
     list.innerHTML = "";
@@ -2596,7 +2667,21 @@
       return;
     }
 
-    state.foods.forEach(food => {
+    const term = foodsListSearchTerm.trim().toLowerCase();
+    const visibleFoods = term
+      ? state.foods.filter(f => f.name.trim().toLowerCase().includes(term))
+      : state.foods;
+
+    if (visibleFoods.length === 0) {
+      list.innerHTML = `
+        <div class="empty-state">
+          <span class="emoji">🔍</span>
+          No foods match "${escapeHtml(foodsListSearchTerm.trim())}"
+        </div>`;
+      return;
+    }
+
+    visibleFoods.forEach(food => {
       const row = document.createElement("div");
       row.className = "food-list-row";
       row.innerHTML = `
@@ -2615,6 +2700,11 @@
       list.appendChild(row);
     });
   }
+
+  document.getElementById("foods-list-search").addEventListener("input", (e) => {
+    foodsListSearchTerm = e.target.value;
+    renderFoods();
+  });
 
   function startEditFood(food) {
     state.editingFoodId = food.id;
@@ -2934,29 +3024,39 @@
     }
   ];
 
-  // Case-insensitive exact match first, then substring, for
-  // matching what the AI or the user typed against real records.
+  // Single pass, early-exit on an exact match — avoids the previous
+  // two-full-scan approach (exact pass, then a separate substring
+  // pass). Matters more as the shared food list grows with more
+  // people using the app.
   function findFoodByName(name) {
     if (!name) return null;
     const lower = name.trim().toLowerCase();
-    let match = state.foods.find(f => f.name.trim().toLowerCase() === lower);
-    if (!match) {
-      match = state.foods.find(f => {
-        const fLower = f.name.trim().toLowerCase();
-        return fLower.includes(lower) || lower.includes(fLower);
-      });
+    let substringMatch = null;
+    for (let i = 0; i < state.foods.length; i++) {
+      const f = state.foods[i];
+      const fLower = f.name.trim().toLowerCase();
+      if (fLower === lower) return f; // exact match found — stop immediately
+      if (!substringMatch && (fLower.includes(lower) || lower.includes(fLower))) {
+        substringMatch = f; // remember the first partial match, keep scanning for a possible exact one
+      }
     }
-    return match || null;
+    return substringMatch;
   }
 
+  // Scans backward from the most recent entry so the common case
+  // (matching something logged recently) exits early without
+  // scanning the whole day and without allocating a filtered array.
   function findTodayEntryByName(name) {
     if (!name) return null;
     const lower = name.trim().toLowerCase();
-    const matches = state.entries.filter(e => {
+    for (let i = state.entries.length - 1; i >= 0; i--) {
+      const e = state.entries[i];
       const eLower = e.food_name.trim().toLowerCase();
-      return eLower === lower || eLower.includes(lower) || lower.includes(eLower);
-    });
-    return matches.length > 0 ? matches[matches.length - 1] : null; // most recent
+      if (eLower === lower || eLower.includes(lower) || lower.includes(eLower)) {
+        return e;
+      }
+    }
+    return null;
   }
 
   /* ============================================================
